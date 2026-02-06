@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Seguimiento - SDHyBC</title>
+    <title>Sistema de seguimiento de actividades - CEySIE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -112,6 +112,91 @@
         let submissionData = { name: '', comments: '' };
         let openComments = {}; // Rastrear qué comentarios están abiertos
         let currentMemberFiles = null; // Guardar los datos del miembro para el modal
+        let filesSearchTerm = ''; // Búsqueda en modal de archivos
+        let filesFilterMonth = ''; // Filtro de mes en modal de archivos
+        
+        // Sistema de audio
+        let audioContext = null;
+        let soundsEnabled = true;
+        
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playHoverSound() {
+            if (!soundsEnabled || !audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800; // Frecuencia del sonido
+            oscillator.type = 'sine'; // Tipo de onda
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Volumen inicial bajo
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1); // Fade out
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function playClickSound() {
+            if (!soundsEnabled || !audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 600;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+        
+        // Agregar eventos de sonido a elementos interactivos
+        function addSoundEvents() {
+            // Esperar a que el DOM esté listo
+            setTimeout(() => {
+                // Botones
+                document.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('mouseenter', playHoverSound);
+                    btn.addEventListener('click', playClickSound);
+                });
+                
+                // Links
+                document.querySelectorAll('a').forEach(link => {
+                    link.addEventListener('mouseenter', playHoverSound);
+                    link.addEventListener('click', playClickSound);
+                });
+                
+                // Tarjetas de actividades
+                document.querySelectorAll('.bg-white.rounded-lg.shadow').forEach(card => {
+                    card.addEventListener('mouseenter', playHoverSound);
+                });
+                
+                // Inputs y selects
+                document.querySelectorAll('input, select').forEach(input => {
+                    input.addEventListener('focus', playHoverSound);
+                });
+            }, 100);
+        }
+        
+        window.toggleSounds = function() {
+            soundsEnabled = !soundsEnabled;
+            const icon = soundsEnabled ? '🔊' : '🔇';
+            const btn = document.getElementById('soundToggle');
+            if (btn) btn.innerHTML = icon;
+        };
         
         // Sistema de inactividad
         let inactivityTimer = null;
@@ -723,6 +808,9 @@
                                 <p class="text-sm text-blue-200">Sesión iniciada como:</p>
                                 <p class="font-bold">${currentUser}${isAdmin ? ' 👑 Admin' : ''}</p>
                             </div>
+                            <button id="soundToggle" onclick="window.toggleSounds()" class="bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded-lg text-xl transition" title="Activar/Desactivar sonidos">
+                                🔊
+                            </button>
                             <a href="https://docs.google.com/spreadsheets/d/1G6o47Gc_Sb-6Vx1w9gwOfcKtahuRUYuEW4A6kiPHKes/edit?usp=sharing" target="_blank" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
@@ -886,7 +974,96 @@
                 </div>
                 ${showModal && currentActivity ? `<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"><div class="flex justify-between mb-4"><div class="flex-1 pr-4"><h3 class="text-xl font-bold">${currentActivity.title}</h3><p class="text-sm text-gray-600 mt-1">${currentActivity.description}</p><p class="text-xs text-gray-500 mt-1">Límite: ${new Date(currentActivity.deadline).toLocaleString('es-MX')}</p></div><button onclick="window.closeModal()" class="text-gray-400">✕</button></div><div class="border-t pt-4 mb-4"><h4 class="font-bold mb-3">Subir Entrega</h4><div class="space-y-3"><textarea id="subComments" rows="2" placeholder="Comentarios..." class="w-full px-3 py-2 text-sm border rounded-lg"></textarea><div class="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-500" onclick="document.getElementById('fileInput').click()"><p class="text-xs">📁 Clic para seleccionar archivos</p></div><input type="file" id="fileInput" multiple class="hidden"><div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs font-bold mb-2">O agregar enlace:</p><div class="space-y-2"><input type="text" id="linkName" placeholder="Nombre del enlace" class="w-full px-3 py-2 text-xs border rounded-lg"><input type="url" id="linkURL" placeholder="https://ejemplo.com" class="w-full px-3 py-2 text-xs border rounded-lg"><button onclick="window.addLink()" class="w-full bg-green-600 text-white px-3 py-2 rounded-lg text-xs">+ Agregar enlace</button></div></div><div id="fileListContainer" class="space-y-1 max-h-32 overflow-y-auto"></div><button id="submitBtn" onclick="window.uploadSubmission()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">📤 Subir</button></div></div><div class="border-t pt-4"><h4 class="font-bold mb-3">Entregas (${currentActivity.submissions.length})</h4>${currentActivity.submissions.length === 0 ? '<p class="text-center text-gray-500 py-4 text-sm">Sin entregas</p>' : `<div class="space-y-3 max-h-64 overflow-y-auto">${currentActivity.submissions.map(s => `<div class="border rounded-lg p-3 bg-gray-50"><p class="font-bold text-sm">${s.name}</p><p class="text-xs text-gray-500">${new Date(s.date).toLocaleString('es-MX')}</p>${s.comments ? `<p class="text-xs text-gray-700 mt-1">${s.comments}</p>` : ''}<div class="mt-2 space-y-1">${s.files.map(f => f.type === 'link' ? `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-xs text-green-600 hover:bg-green-50 px-2 py-1 rounded">🔗 <span class="truncate">${f.name}</span></a>` : `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:bg-blue-100 px-2 py-1 rounded">📎 <span class="truncate">${f.name}</span></a>`).join('')}</div></div>`).join('')}</div>`}</div></div></div>` : ''}
                 ${showDeleteModal ? `<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div class="bg-white rounded-lg p-6 max-w-md w-full"><h3 class="text-xl font-bold mb-4">Eliminar</h3><p class="text-gray-600 mb-4">Contraseña:</p><input type="password" id="delPassword" class="w-full px-4 py-2 border rounded-lg mb-4"><div class="flex gap-3"><button onclick="window.confirmDelete()" class="flex-1 bg-red-600 text-white px-6 py-2 rounded-lg">Eliminar</button><button onclick="window.closeDeleteModal()" class="flex-1 bg-gray-200 px-6 py-2 rounded-lg">Cancelar</button></div></div></div>` : ''}
-                ${showFilesModal && currentMemberFiles ? `<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"><div class="flex justify-between items-center mb-4"><h3 class="text-2xl font-bold">Archivos de ${currentMemberFiles.name}</h3><button onclick="window.closeFilesModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button></div><div class="mb-4 grid grid-cols-3 gap-4 text-center"><div class="bg-blue-50 rounded p-3"><p class="text-3xl font-bold text-blue-600">${currentMemberFiles.created}</p><p class="text-sm text-gray-600">Actividades creadas</p></div><div class="bg-green-50 rounded p-3"><p class="text-3xl font-bold text-green-600">${currentMemberFiles.submissions}</p><p class="text-sm text-gray-600">Entregas realizadas</p></div><div class="bg-purple-50 rounded p-3"><p class="text-3xl font-bold text-purple-600">${currentMemberFiles.totalFiles}</p><p class="text-sm text-gray-600">Archivos totales</p></div></div><div class="space-y-4">${currentMemberFiles.submissionDetails.map(detail => `<div class="border rounded-lg p-4 bg-gray-50"><h4 class="font-bold text-lg mb-3 text-blue-600">📋 ${detail.activity}</h4>${detail.submissions.map(sub => `<div class="bg-white rounded p-3 mb-2 shadow-sm"><div class="flex justify-between items-start mb-2"><p class="text-sm font-semibold text-gray-700">📅 ${new Date(sub.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p></div>${sub.comments ? `<p class="text-sm text-gray-600 mb-2"><strong>💬 Comentario:</strong> ${sub.comments}</p>` : ''}<div class="border-t pt-2 mt-2"><p class="text-xs font-semibold text-gray-700 mb-2">📎 Archivos (${sub.files.length}):</p><div class="space-y-1">${sub.files.map(f => f.type === 'link' ? `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-sm text-green-600 hover:bg-green-50 px-2 py-1 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg><span class="truncate">${f.name}</span></a>` : `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-50 px-2 py-1 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><span class="truncate">${f.name}</span></a>`).join('')}</div></div></div>`).join('')}</div>`).join('')}</div></div></div>` : ''}
+                ${showFilesModal && currentMemberFiles ? `
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div class="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-2xl font-bold">Archivos de ${currentMemberFiles.name}</h3>
+                                <button onclick="window.closeFilesModal()" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+                            </div>
+                            
+                            <div class="mb-4 grid grid-cols-3 gap-4 text-center">
+                                <div class="bg-blue-50 rounded p-3">
+                                    <p class="text-3xl font-bold text-blue-600">${currentMemberFiles.created}</p>
+                                    <p class="text-sm text-gray-600">Actividades creadas</p>
+                                </div>
+                                <div class="bg-green-50 rounded p-3">
+                                    <p class="text-3xl font-bold text-green-600">${currentMemberFiles.submissions}</p>
+                                    <p class="text-sm text-gray-600">Entregas realizadas</p>
+                                </div>
+                                <div class="bg-purple-50 rounded p-3">
+                                    <p class="text-3xl font-bold text-purple-600">${currentMemberFiles.totalFiles}</p>
+                                    <p class="text-sm text-gray-600">Archivos totales</p>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4 grid grid-cols-2 gap-3">
+                                <input 
+                                    type="text" 
+                                    placeholder="🔍 Buscar por actividad, comentario o archivo..." 
+                                    value="${filesSearchTerm}"
+                                    oninput="window.updateFilesSearch(this.value)"
+                                    class="px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                <select 
+                                    onchange="window.updateFilesMonth(this.value)"
+                                    class="px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">📅 Todos los meses</option>
+                                    <option value="2026-01" ${filesFilterMonth === '2026-01' ? 'selected' : ''}>Enero 2026</option>
+                                    <option value="2026-02" ${filesFilterMonth === '2026-02' ? 'selected' : ''}>Febrero 2026</option>
+                                    <option value="2026-03" ${filesFilterMonth === '2026-03' ? 'selected' : ''}>Marzo 2026</option>
+                                    <option value="2026-04" ${filesFilterMonth === '2026-04' ? 'selected' : ''}>Abril 2026</option>
+                                    <option value="2026-05" ${filesFilterMonth === '2026-05' ? 'selected' : ''}>Mayo 2026</option>
+                                    <option value="2026-06" ${filesFilterMonth === '2026-06' ? 'selected' : ''}>Junio 2026</option>
+                                    <option value="2026-07" ${filesFilterMonth === '2026-07' ? 'selected' : ''}>Julio 2026</option>
+                                    <option value="2026-08" ${filesFilterMonth === '2026-08' ? 'selected' : ''}>Agosto 2026</option>
+                                    <option value="2026-09" ${filesFilterMonth === '2026-09' ? 'selected' : ''}>Septiembre 2026</option>
+                                    <option value="2026-10" ${filesFilterMonth === '2026-10' ? 'selected' : ''}>Octubre 2026</option>
+                                    <option value="2026-11" ${filesFilterMonth === '2026-11' ? 'selected' : ''}>Noviembre 2026</option>
+                                    <option value="2026-12" ${filesFilterMonth === '2026-12' ? 'selected' : ''}>Diciembre 2026</option>
+                                </select>
+                            </div>
+                            
+                            <div class="overflow-y-auto flex-1">
+                                ${(() => {
+                                    const filteredDetails = getFilteredSubmissions(currentMemberFiles.submissionDetails);
+                                    if (filteredDetails.length === 0) {
+                                        return '<div class="text-center py-8 text-gray-500">No se encontraron resultados</div>';
+                                    }
+                                    return filteredDetails.map(detail => `
+                                        <div class="border rounded-lg p-4 bg-gray-50 mb-4">
+                                            <h4 class="font-bold text-lg mb-3 text-blue-600">📋 ${detail.activity}</h4>
+                                            ${detail.submissions.map(sub => `
+                                                <div class="bg-white rounded p-3 mb-2 shadow-sm">
+                                                    <div class="flex justify-between items-start mb-2">
+                                                        <p class="text-sm font-semibold text-gray-700">📅 ${new Date(sub.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                                                    </div>
+                                                    ${sub.comments ? `<p class="text-sm text-gray-600 mb-2"><strong>💬 Comentario:</strong> ${sub.comments}</p>` : ''}
+                                                    <div class="border-t pt-2 mt-2">
+                                                        <p class="text-xs font-semibold text-gray-700 mb-2">📎 Archivos (${sub.files.length}):</p>
+                                                        <div class="space-y-1">
+                                                            ${sub.files.map(f => f.type === 'link' ? 
+                                                                `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-sm text-green-600 hover:bg-green-50 px-2 py-1 rounded">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                                                                    <span class="truncate">${f.name}</span>
+                                                                </a>` : 
+                                                                `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-sm text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">
+                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                                    <span class="truncate">${f.name}</span>
+                                                                </a>`
+                                                            ).join('')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    `).join('');
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
             `;
             document.getElementById('filterMember')?.addEventListener('change', (e) => { filterMember = e.target.value; render(); });
             document.getElementById('filterStatus')?.addEventListener('change', (e) => { filterStatus = e.target.value; render(); });
@@ -946,20 +1123,75 @@
             const stats = getMemberStats();
             currentMemberFiles = stats.find(m => m.name === memberName);
             showFilesModal = true;
+            filesSearchTerm = '';
+            filesFilterMonth = '';
             render();
         };
         window.closeFilesModal = () => {
             showFilesModal = false;
             currentMemberFiles = null;
+            filesSearchTerm = '';
+            filesFilterMonth = '';
             render();
         };
+        
+        window.updateFilesSearch = (value) => {
+            filesSearchTerm = value;
+            render();
+        };
+        
+        window.updateFilesMonth = (value) => {
+            filesFilterMonth = value;
+            render();
+        };
+        
+        function getFilteredSubmissions(submissionDetails) {
+            return submissionDetails.map(detail => {
+                const filteredSubs = detail.submissions.filter(sub => {
+                    const matchSearch = !filesSearchTerm || 
+                        detail.activity.toLowerCase().includes(filesSearchTerm.toLowerCase()) ||
+                        sub.comments?.toLowerCase().includes(filesSearchTerm.toLowerCase()) ||
+                        sub.files.some(f => f.name.toLowerCase().includes(filesSearchTerm.toLowerCase()));
+                    
+                    const matchMonth = !filesFilterMonth || sub.date.startsWith(filesFilterMonth);
+                    
+                    return matchSearch && matchMonth;
+                });
+                
+                return { ...detail, submissions: filteredSubs };
+            }).filter(detail => detail.submissions.length > 0);
+        }
         
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (showModal) window.closeModal(); if (showDeleteModal) window.closeDeleteModal(); } });
         
         window.addEventListener('load', () => {
             setTimeout(initGoogleDrive, 1000);
             initLogin();
+            // Inicializar audio con interacción del usuario
+            document.addEventListener('click', () => {
+                if (!audioContext) {
+                    initAudio();
+                }
+            }, { once: true });
         });
+        
+        // Agregar eventos de sonido después de cada render
+        function addSoundsAfterRender() {
+            addSoundEvents();
+        }
+        
+        // Observer para detectar cambios en el DOM y agregar sonidos
+        const observer = new MutationObserver(() => {
+            addSoundEvents();
+        });
+        
+        // Observar cambios en el app
+        setTimeout(() => {
+            const appElement = document.getElementById('app');
+            if (appElement) {
+                observer.observe(appElement, { childList: true, subtree: true });
+            }
+        }, 1000);
     </script>
 </body>
 </html>
