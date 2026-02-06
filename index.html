@@ -128,32 +128,34 @@
         function playClickSound() {
             if (!soundsEnabled || !audioContext) return;
             
-            // Sonido moderno tipo "pop" o "tap"
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            const filter = audioContext.createBiquadFilter();
+            // Crear un click mecánico realista usando ruido blanco filtrado
+            const bufferSize = audioContext.sampleRate * 0.05; // 50ms
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
             
-            oscillator.connect(filter);
+            // Generar ruido blanco breve
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+            }
+            
+            const noise = audioContext.createBufferSource();
+            noise.buffer = buffer;
+            
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 2000; // Frecuencia del click
+            filter.Q.value = 5; // Resonancia para hacerlo más nítido
+            
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
+            
+            noise.connect(filter);
             filter.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            // Frecuencia que sube rápido (efecto "pop")
-            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.02);
-            oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.08);
-            
-            oscillator.type = 'sine';
-            
-            // Filtro para hacer el sonido más suave
-            filter.type = 'lowpass';
-            filter.frequency.value = 2000;
-            
-            // Envolvente rápida
-            gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.08);
+            noise.start(audioContext.currentTime);
+            noise.stop(audioContext.currentTime + 0.05);
         }
         
         // Agregar eventos de sonido a elementos interactivos
@@ -207,6 +209,7 @@
             // Esto obliga a todos a iniciar sesión cada vez
             localStorage.removeItem('selectedUser');
             localStorage.removeItem('isAuthenticated');
+            // NO limpiar isAdmin aquí, se limpia solo al cerrar sesión
             
             // Mostrar lista de usuarios
             const userListDiv = document.getElementById('userList');
@@ -248,13 +251,24 @@
                     document.getElementById('app').classList.remove('hidden');
                     // Guardar que ya se autenticó
                     localStorage.setItem('isAuthenticated', 'true');
+                    // Guardar usuario actual
+                    localStorage.setItem('selectedUser', currentUser);
+                    // Cargar estado de admin desde localStorage
+                    isAdmin = localStorage.getItem('isAdmin') === 'true';
+                    console.log('isAdmin cargado:', isAdmin);
                     loadActivities();
                     // Iniciar sistema de inactividad
                     setupActivityListeners();
                 }, 1000);
             } catch (error) {
                 console.error('Error al autenticar:', error);
-                alert('Error al conectar con Google. Intenta de nuevo.');
+                // Si es error de cookies de terceros, mostrar mensaje más claro
+                if (error.message && error.message.includes('popup')) {
+                    alert('Por favor, acepta las cookies de terceros en tu navegador para continuar.');
+                } else {
+                    alert('Error al conectar con Google. Intenta de nuevo.');
+                }
+                // Regresar al paso de conectar Google (NO a selección de usuario)
                 document.getElementById('stepLoading').classList.add('hidden');
                 document.getElementById('stepConnectGoogle').classList.remove('hidden');
             }
@@ -305,7 +319,11 @@
                                 // Verificar si es admin (Marco con email específico)
                                 if (currentUser === 'Marco Carrasco' && userEmail === 'ceysie.cuu@gmail.com') {
                                     isAdmin = true;
+                                    localStorage.setItem('isAdmin', 'true');
                                     console.log('✅ Acceso administrativo concedido');
+                                } else {
+                                    isAdmin = false;
+                                    localStorage.removeItem('isAdmin');
                                 }
                             } catch (error) {
                                 console.error('Error obteniendo email:', error);
@@ -616,6 +634,8 @@
                 // Limpiar localStorage
                 localStorage.removeItem('selectedUser');
                 localStorage.removeItem('isAuthenticated');
+                localStorage.removeItem('isAdmin');
+                isAdmin = false;
                 // Recargar la página
                 location.reload();
             }
@@ -1132,7 +1152,20 @@
         
         window.updateFilesSearch = (value) => {
             filesSearchTerm = value;
+            // Guardar el foco y la posición del cursor
+            const searchInput = document.querySelector('input[placeholder*="Buscar por actividad"]');
+            const cursorPosition = searchInput?.selectionStart;
+            
             render();
+            
+            // Restaurar el foco después del render
+            setTimeout(() => {
+                const newSearchInput = document.querySelector('input[placeholder*="Buscar por actividad"]');
+                if (newSearchInput) {
+                    newSearchInput.focus();
+                    newSearchInput.setSelectionRange(cursorPosition, cursorPosition);
+                }
+            }, 0);
         };
         
         window.updateFilesMonth = (value) => {
@@ -1195,4 +1228,5 @@
     </script>
 </body>
 </html>
+
 
