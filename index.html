@@ -102,7 +102,7 @@
         let activities = [];
         let showForm = false, showModal = false, showDeleteModal = false, showMemberStats = false;
         let currentActivity = null, activityToDelete = null, deletePassword = '';
-        let selectedFiles = [], selectedLinks = [], searchTerm = '', filterMember = '', filterStatus = '';
+        let selectedFiles = [], selectedLinks = [], searchTerm = '', filterMember = '', filterStatus = '', filterMonth = '';
         let formData = { creator: '', title: '', description: '', deadline: '', requiresSubmission: false };
         let submissionData = { name: '', comments: '' };
 
@@ -300,7 +300,12 @@
             }
             // Usar el usuario autenticado
             formData.creator = currentUser;
-            await addDoc(collection(db, 'activities'), { ...formData, submissions: [], createdAt: new Date().toISOString() });
+            await addDoc(collection(db, 'activities'), { 
+                ...formData, 
+                submissions: [], 
+                comments: [], // Inicializar array de comentarios
+                createdAt: new Date().toISOString() 
+            });
             showForm = false;
             formData = { creator: '', title: '', description: '', deadline: '', requiresSubmission: false };
             alert('Actividad creada'); 
@@ -387,6 +392,40 @@
             }
         }
 
+        async function sendComment(activityId) {
+            const commentInput = document.getElementById(`commentInput-${activityId}`);
+            const commentText = commentInput?.value.trim();
+            
+            if (!commentText) {
+                alert('Escribe un comentario');
+                return;
+            }
+            
+            const activity = activities.find(a => a.firebaseId === activityId);
+            if (!activity) return;
+            
+            const newComment = {
+                id: Date.now().toString(),
+                user: currentUser,
+                text: commentText,
+                date: new Date().toISOString()
+            };
+            
+            const updatedComments = [...(activity.comments || []), newComment];
+            
+            try {
+                await updateDoc(doc(db, 'activities', activityId), { 
+                    comments: updatedComments 
+                });
+                commentInput.value = '';
+            } catch (error) {
+                console.error('Error al enviar comentario:', error);
+                alert('Error al enviar comentario');
+            }
+        }
+
+        window.sendComment = sendComment;
+
         function handleFileSelect(e) {
             Array.from(e.target.files).forEach(f => {
                 selectedFiles.push(f);
@@ -435,7 +474,8 @@
                 const matchSearch = !searchTerm || a.title.toLowerCase().includes(searchTerm.toLowerCase()) || a.description.toLowerCase().includes(searchTerm.toLowerCase());
                 const matchMember = !filterMember || a.creator === filterMember;
                 const matchStatus = !filterStatus || (filterStatus === 'activa' ? new Date(a.deadline) >= new Date() : new Date(a.deadline) < new Date());
-                return matchSearch && matchMember && matchStatus;
+                const matchMonth = !filterMonth || (a.createdAt && a.createdAt.startsWith(filterMonth));
+                return matchSearch && matchMember && matchStatus && matchMonth;
             });
         }
 
@@ -485,16 +525,96 @@
                                 <button onclick="window.toggleForm()" class="bg-blue-600 text-white px-6 py-2 rounded-lg">+ Crear</button>
                                 <button onclick="window.toggleStats()" class="bg-green-600 text-white px-6 py-2 rounded-lg">${showMemberStats ? 'Actividades' : 'Seguimiento'}</button>
                             </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <select id="filterMember" class="px-4 py-2 border rounded-lg"><option value="">Todos</option>${teamMembers.map(m => `<option value="${m}" ${filterMember === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
-                                <select id="filterStatus" class="px-4 py-2 border rounded-lg"><option value="">Todos</option><option value="activa" ${filterStatus === 'activa' ? 'selected' : ''}>Activas</option><option value="vencida" ${filterStatus === 'vencida' ? 'selected' : ''}>Vencidas</option></select>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Usuario</label>
+                                    <select id="filterMember" class="w-full px-4 py-2 border rounded-lg"><option value="">Todos</option>${teamMembers.map(m => `<option value="${m}" ${filterMember === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Estado de actividad</label>
+                                    <select id="filterStatus" class="w-full px-4 py-2 border rounded-lg"><option value="">Todos</option><option value="activa" ${filterStatus === 'activa' ? 'selected' : ''}>Activas</option><option value="vencida" ${filterStatus === 'vencida' ? 'selected' : ''}>Vencidas</option></select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">Mes de creación</label>
+                                    <select id="filterMonth" class="w-full px-4 py-2 border rounded-lg">
+                                        <option value="">Todos los meses</option>
+                                        <option value="2025-01">Enero 2025</option>
+                                        <option value="2025-02">Febrero 2025</option>
+                                        <option value="2025-03">Marzo 2025</option>
+                                        <option value="2025-04">Abril 2025</option>
+                                        <option value="2025-05">Mayo 2025</option>
+                                        <option value="2025-06">Junio 2025</option>
+                                        <option value="2025-07">Julio 2025</option>
+                                        <option value="2025-08">Agosto 2025</option>
+                                        <option value="2025-09">Septiembre 2025</option>
+                                        <option value="2025-10">Octubre 2025</option>
+                                        <option value="2025-11">Noviembre 2025</option>
+                                        <option value="2025-12">Diciembre 2025</option>
+                                        <option value="2026-01">Enero 2026</option>
+                                        <option value="2026-02">Febrero 2026</option>
+                                        <option value="2026-03">Marzo 2026</option>
+                                        <option value="2026-04">Abril 2026</option>
+                                        <option value="2026-05">Mayo 2026</option>
+                                        <option value="2026-06">Junio 2026</option>
+                                        <option value="2026-07">Julio 2026</option>
+                                        <option value="2026-08">Agosto 2026</option>
+                                        <option value="2026-09">Septiembre 2026</option>
+                                        <option value="2026-10">Octubre 2026</option>
+                                        <option value="2026-11">Noviembre 2026</option>
+                                        <option value="2026-12">Diciembre 2026</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
                     ${showForm ? `<div class="bg-white rounded-lg shadow p-6 mb-6"><h2 class="text-xl font-bold mb-4">Nueva Actividad</h2><div class="space-y-4"><div><label class="block text-sm mb-2">Título *</label><input type="text" id="title" class="w-full px-4 py-2 border rounded-lg"></div><div><label class="block text-sm mb-2">Descripción *</label><textarea id="description" rows="4" class="w-full px-4 py-2 border rounded-lg"></textarea></div><div><label class="block text-sm mb-2">Límite *</label><input type="datetime-local" id="deadline" class="w-full px-4 py-2 border rounded-lg"></div><label class="flex items-center gap-2"><input type="checkbox" id="requiresSubmission">Requiere entregas</label><div class="flex gap-3"><button onclick="window.saveActivity()" class="bg-blue-600 text-white px-6 py-2 rounded-lg">Crear</button><button onclick="window.toggleForm()" class="bg-gray-200 px-6 py-2 rounded-lg">Cancelar</button></div></div></div>` : ''}
                     ${showMemberStats ? `<div class="space-y-4">${getMemberStats().map(m => `<div class="bg-white rounded-lg shadow p-6"><h3 class="text-xl font-bold">${m.name}</h3><div class="flex gap-4 text-sm text-gray-600 my-2"><span>Creadas: ${m.created}</span><span>Entregas: ${m.submissions}</span><span>Archivos: ${m.totalFiles}</span></div>${m.submissionDetails.length > 0 ? `<div class="border-t pt-4">${m.submissionDetails.map(d => `<div class="bg-gray-50 rounded p-3 mb-2"><p class="font-medium">${d.activity}</p>${d.submissions.map(s => `<div class="ml-4 text-sm text-gray-600 mt-1"><p>Fecha: ${new Date(s.date).toLocaleDateString('es-MX')}</p>${s.comments ? `<p>Comentario: ${s.comments}</p>` : ''}<p>Archivos: ${s.files.map(f => f.name).join(', ')}</p></div>`).join('')}</div>`).join('')}</div>` : '<p class="text-gray-500 text-sm pt-4 border-t">Sin entregas</p>'}</div>`).join('')}</div>` : `<div class="space-y-4">${filtered.length === 0 ? '<div class="bg-white rounded-lg shadow p-12 text-center"><p class="text-gray-500">No hay actividades</p></div>' : filtered.map(act => {
                         const isExpired = new Date(act.deadline) < new Date();
-                        return `<div class="bg-white rounded-lg shadow p-6"><div class="flex justify-between items-start mb-3"><div class="flex gap-3"><span class="px-3 py-1 rounded-full text-xs font-bold ${isExpired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${isExpired ? 'VENCIDA' : 'ACTIVA'}</span>${act.requiresSubmission ? '<span class="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-800">Requiere entregas</span>' : ''}</div><button onclick="window.openDeleteModal('${act.firebaseId}')" class="text-red-600 hover:bg-red-50 p-2 rounded">🗑️</button></div><h3 class="text-xl font-bold mb-2">${act.title}</h3><p class="text-gray-600 mb-3">${act.description}</p><div class="text-sm text-gray-600 mb-3"><p><strong>Creador:</strong> ${act.creator}</p><p><strong>Límite:</strong> ${new Date(act.deadline).toLocaleString('es-MX')}</p>${act.requiresSubmission ? `<p><strong>Entregas:</strong> ${act.submissions.length}</p>` : ''}</div>${act.requiresSubmission ? `<button onclick="window.openSubmissionModal('${act.firebaseId}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Ver/Subir</button>` : ''}</div>`;
+                        const activityComments = act.comments || [];
+                        return `<div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex gap-3">
+                                    <span class="px-3 py-1 rounded-full text-xs font-bold ${isExpired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${isExpired ? 'VENCIDA' : 'ACTIVA'}</span>
+                                    ${act.requiresSubmission ? '<span class="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-800">Requiere entregas</span>' : ''}
+                                </div>
+                                <button onclick="window.openDeleteModal('${act.firebaseId}')" class="text-red-600 hover:bg-red-50 p-2 rounded">🗑️</button>
+                            </div>
+                            <h3 class="text-xl font-bold mb-2">${act.title}</h3>
+                            <p class="text-gray-600 mb-3">${act.description}</p>
+                            <div class="text-sm text-gray-600 mb-3">
+                                <p><strong>Creador:</strong> ${act.creator}</p>
+                                <p><strong>Límite:</strong> ${new Date(act.deadline).toLocaleString('es-MX')}</p>
+                                ${act.requiresSubmission ? `<p><strong>Entregas:</strong> ${act.submissions.length}</p>` : ''}
+                            </div>
+                            ${act.requiresSubmission ? `<button onclick="window.openSubmissionModal('${act.firebaseId}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm mb-4">Ver/Subir</button>` : ''}
+                            
+                            <!-- Sección de comentarios -->
+                            <div class="border-t pt-4 mt-4">
+                                <h4 class="font-bold text-sm mb-3 flex items-center gap-2">
+                                    💬 Comentarios (${activityComments.length})
+                                </h4>
+                                <div class="bg-gray-50 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto space-y-2">
+                                    ${activityComments.length === 0 ? '<p class="text-xs text-gray-500 text-center py-2">No hay comentarios aún</p>' : activityComments.map(comment => `
+                                        <div class="bg-white rounded p-2 shadow-sm">
+                                            <div class="flex items-start gap-2">
+                                                <div class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                                    <span class="text-white text-xs font-bold">${comment.user.charAt(0)}</span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <p class="text-xs font-semibold text-gray-800">${comment.user}</p>
+                                                    <p class="text-xs text-gray-600 break-words">${comment.text}</p>
+                                                    <p class="text-xs text-gray-400 mt-1">${new Date(comment.date).toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" id="commentInput-${act.firebaseId}" placeholder="Escribe un comentario..." class="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" onkeypress="if(event.key==='Enter') window.sendComment('${act.firebaseId}')">
+                                    <button onclick="window.sendComment('${act.firebaseId}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Enviar</button>
+                                </div>
+                            </div>
+                        </div>`;
                     }).join('')}</div>`}
                 </div>
                 ${showModal && currentActivity ? `<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"><div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"><div class="flex justify-between mb-4"><div class="flex-1 pr-4"><h3 class="text-xl font-bold">${currentActivity.title}</h3><p class="text-sm text-gray-600 mt-1">${currentActivity.description}</p><p class="text-xs text-gray-500 mt-1">Límite: ${new Date(currentActivity.deadline).toLocaleString('es-MX')}</p></div><button onclick="window.closeModal()" class="text-gray-400">✕</button></div><div class="border-t pt-4 mb-4"><h4 class="font-bold mb-3">Subir Entrega</h4><div class="space-y-3"><textarea id="subComments" rows="2" placeholder="Comentarios..." class="w-full px-3 py-2 text-sm border rounded-lg"></textarea><div class="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-blue-500" onclick="document.getElementById('fileInput').click()"><p class="text-xs">📁 Clic para seleccionar archivos</p></div><input type="file" id="fileInput" multiple class="hidden"><div class="bg-gray-50 p-3 rounded-lg"><p class="text-xs font-bold mb-2">O agregar enlace:</p><div class="space-y-2"><input type="text" id="linkName" placeholder="Nombre del enlace" class="w-full px-3 py-2 text-xs border rounded-lg"><input type="url" id="linkURL" placeholder="https://ejemplo.com" class="w-full px-3 py-2 text-xs border rounded-lg"><button onclick="window.addLink()" class="w-full bg-green-600 text-white px-3 py-2 rounded-lg text-xs">+ Agregar enlace</button></div></div><div id="fileListContainer" class="space-y-1 max-h-32 overflow-y-auto"></div><button id="submitBtn" onclick="window.uploadSubmission()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">📤 Subir</button></div></div><div class="border-t pt-4"><h4 class="font-bold mb-3">Entregas (${currentActivity.submissions.length})</h4>${currentActivity.submissions.length === 0 ? '<p class="text-center text-gray-500 py-4 text-sm">Sin entregas</p>' : `<div class="space-y-3 max-h-64 overflow-y-auto">${currentActivity.submissions.map(s => `<div class="border rounded-lg p-3 bg-gray-50"><p class="font-bold text-sm">${s.name}</p><p class="text-xs text-gray-500">${new Date(s.date).toLocaleString('es-MX')}</p>${s.comments ? `<p class="text-xs text-gray-700 mt-1">${s.comments}</p>` : ''}<div class="mt-2 space-y-1">${s.files.map(f => f.type === 'link' ? `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-xs text-green-600 hover:bg-green-50 px-2 py-1 rounded">🔗 <span class="truncate">${f.name}</span></a>` : `<a href="${f.url}" target="_blank" class="flex items-center gap-2 text-xs text-blue-600 hover:bg-blue-100 px-2 py-1 rounded">📎 <span class="truncate">${f.name}</span></a>`).join('')}</div></div>`).join('')}</div>`}</div></div></div>` : ''}
@@ -503,6 +623,7 @@
             document.getElementById('searchInput')?.addEventListener('input', (e) => { searchTerm = e.target.value; render(); });
             document.getElementById('filterMember')?.addEventListener('change', (e) => { filterMember = e.target.value; render(); });
             document.getElementById('filterStatus')?.addEventListener('change', (e) => { filterStatus = e.target.value; render(); });
+            document.getElementById('filterMonth')?.addEventListener('change', (e) => { filterMonth = e.target.value; render(); });
             document.getElementById('fileInput')?.addEventListener('change', handleFileSelect);
         }
 
