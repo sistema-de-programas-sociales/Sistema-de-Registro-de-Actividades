@@ -116,18 +116,83 @@
             });
         }
         
-        // Subir archivo a Google Drive
-        async function uploadToGoogleDrive(file, activityTitle) {
+        // Buscar carpeta por nombre dentro de una carpeta padre
+        async function findFolder(folderName, parentFolderId) {
+            console.log(`🔍 Buscando carpeta: ${folderName}`);
+            
+            const query = `name='${folderName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+            
+            const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Error al buscar carpeta');
+            }
+            
+            const result = await response.json();
+            return result.files && result.files.length > 0 ? result.files[0].id : null;
+        }
+        
+        // Crear carpeta en Google Drive
+        async function createFolder(folderName, parentFolderId) {
+            console.log(`📁 Creando carpeta: ${folderName}`);
+            
+            const metadata = {
+                name: folderName,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [parentFolderId]
+            };
+            
+            const response = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(metadata)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Error al crear carpeta');
+            }
+            
+            const result = await response.json();
+            console.log(`✅ Carpeta creada: ${result.name} (${result.id})`);
+            return result.id;
+        }
+        
+        // Obtener o crear carpeta (si no existe, la crea)
+        async function getOrCreateFolder(folderName, parentFolderId) {
+            let folderId = await findFolder(folderName, parentFolderId);
+            
+            if (!folderId) {
+                folderId = await createFolder(folderName, parentFolderId);
+            } else {
+                console.log(`✅ Carpeta encontrada: ${folderName}`);
+            }
+            
+            return folderId;
+        }
+        
+        // Subir archivo a Google Drive con estructura de carpetas
+        async function uploadToGoogleDrive(file, activityTitle, personName) {
             console.log(`🔵 Subiendo ${file.name} a Google Drive...`);
             
             if (!accessToken) {
                 await authenticateGoogleDrive();
             }
             
+            // Crear estructura: Carpeta Principal / Nombre Persona / Actividad
+            const personFolderId = await getOrCreateFolder(personName, GOOGLE_DRIVE_FOLDER_ID);
+            const activityFolderId = await getOrCreateFolder(activityTitle, personFolderId);
+            
             const metadata = {
-                name: `${Date.now()}_${file.name}`,
-                parents: [GOOGLE_DRIVE_FOLDER_ID],
-                description: `Entrega para: ${activityTitle}`
+                name: file.name,
+                parents: [activityFolderId],
+                description: `Entregado por: ${personName} para ${activityTitle}`
             };
             
             const form = new FormData();
@@ -155,7 +220,9 @@
                 driveId: result.id,
                 url: result.webViewLink,
                 downloadUrl: result.webContentLink,
-                size: file.size
+                size: file.size,
+                personFolder: personName,
+                activityFolder: activityTitle
             };
         }
         
@@ -261,13 +328,14 @@
                 
                 console.log('🔵 Subiendo archivos a Google Drive...');
                 const submissionId = Date.now().toString();
+                const personName = submissionData.name.trim();
                 
                 const uploadedFiles = [];
                 for (let i = 0; i < selectedFiles.length; i++) {
                     const file = selectedFiles[i];
                     console.log(`  📤 Subiendo ${i + 1}/${selectedFiles.length}: ${file.name}...`);
                     try {
-                        const uploadedFile = await uploadToGoogleDrive(file, currentActivity.title);
+                        const uploadedFile = await uploadToGoogleDrive(file, currentActivity.title, personName);
                         uploadedFiles.push(uploadedFile);
                         console.log(`  ✅ Subido: ${file.name}`);
                     } catch (uploadError) {
@@ -464,3 +532,4 @@
     </script>
 </body>
 </html>
+
