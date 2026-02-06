@@ -125,42 +125,35 @@
             }
         }
         
-        function playHoverSound() {
-            if (!soundsEnabled || !audioContext) return;
-            
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = 800; // Frecuencia del sonido
-            oscillator.type = 'sine'; // Tipo de onda
-            
-            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Volumen inicial bajo
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1); // Fade out
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.1);
-        }
-        
         function playClickSound() {
             if (!soundsEnabled || !audioContext) return;
             
+            // Sonido moderno tipo "pop" o "tap"
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
             
-            oscillator.connect(gainNode);
+            oscillator.connect(filter);
+            filter.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            oscillator.frequency.value = 600;
+            // Frecuencia que sube rápido (efecto "pop")
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.02);
+            oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.08);
+            
             oscillator.type = 'sine';
             
-            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            // Filtro para hacer el sonido más suave
+            filter.type = 'lowpass';
+            filter.frequency.value = 2000;
+            
+            // Envolvente rápida
+            gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
             
             oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.15);
+            oscillator.stop(audioContext.currentTime + 0.08);
         }
         
         // Agregar eventos de sonido a elementos interactivos
@@ -169,24 +162,20 @@
             setTimeout(() => {
                 // Botones
                 document.querySelectorAll('button').forEach(btn => {
-                    btn.addEventListener('mouseenter', playHoverSound);
+                    btn.removeEventListener('click', playClickSound); // Evitar duplicados
                     btn.addEventListener('click', playClickSound);
                 });
                 
                 // Links
                 document.querySelectorAll('a').forEach(link => {
-                    link.addEventListener('mouseenter', playHoverSound);
+                    link.removeEventListener('click', playClickSound);
                     link.addEventListener('click', playClickSound);
                 });
                 
-                // Tarjetas de actividades
-                document.querySelectorAll('.bg-white.rounded-lg.shadow').forEach(card => {
-                    card.addEventListener('mouseenter', playHoverSound);
-                });
-                
-                // Inputs y selects
-                document.querySelectorAll('input, select').forEach(input => {
-                    input.addEventListener('focus', playHoverSound);
+                // Tarjetas clickeables
+                document.querySelectorAll('.cursor-pointer').forEach(card => {
+                    card.removeEventListener('click', playClickSound);
+                    card.addEventListener('click', playClickSound);
                 });
             }, 100);
         }
@@ -196,6 +185,12 @@
             const icon = soundsEnabled ? '🔊' : '🔇';
             const btn = document.getElementById('soundToggle');
             if (btn) btn.innerHTML = icon;
+            // Guardar preferencia
+            localStorage.setItem('soundsEnabled', soundsEnabled);
+            // Reproducir sonido de confirmación si se activa
+            if (soundsEnabled && audioContext) {
+                playClickSound();
+            }
         };
         
         // Sistema de inactividad
@@ -1167,6 +1162,11 @@
         window.addEventListener('load', () => {
             setTimeout(initGoogleDrive, 1000);
             initLogin();
+            // Cargar preferencia de sonidos
+            const savedSoundPref = localStorage.getItem('soundsEnabled');
+            if (savedSoundPref !== null) {
+                soundsEnabled = savedSoundPref === 'true';
+            }
             // Inicializar audio con interacción del usuario
             document.addEventListener('click', () => {
                 if (!audioContext) {
@@ -1195,3 +1195,4 @@
     </script>
 </body>
 </html>
+
