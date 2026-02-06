@@ -109,6 +109,29 @@
         // ==================== INICIO DE SESIÓN ====================
         
         function initLogin() {
+            // Verificar si hay un usuario guardado
+            const savedUser = localStorage.getItem('selectedUser');
+            const isAuthenticated = localStorage.getItem('isAuthenticated');
+            
+            // Si ya está autenticado, ir directo al sistema
+            if (savedUser && isAuthenticated === 'true') {
+                currentUser = savedUser;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                loadActivities();
+                return;
+            }
+            
+            // Si tiene usuario seleccionado pero no autenticado, ir a paso de Google
+            if (savedUser) {
+                currentUser = savedUser;
+                document.getElementById('selectedUserName').textContent = savedUser;
+                document.getElementById('stepSelectUser').classList.add('hidden');
+                document.getElementById('stepConnectGoogle').classList.remove('hidden');
+                return;
+            }
+            
+            // Mostrar lista de usuarios
             const userListDiv = document.getElementById('userList');
             userListDiv.innerHTML = teamMembers.map(member => `
                 <button onclick="window.selectUser('${member}')" class="w-full text-left px-4 py-3 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition duration-200 flex items-center gap-3">
@@ -122,6 +145,8 @@
 
         window.selectUser = function(userName) {
             currentUser = userName;
+            // Guardar en localStorage para mantener el estado
+            localStorage.setItem('selectedUser', userName);
             document.getElementById('selectedUserName').textContent = userName;
             document.getElementById('stepSelectUser').classList.add('hidden');
             document.getElementById('stepConnectGoogle').classList.remove('hidden');
@@ -137,6 +162,8 @@
                 setTimeout(() => {
                     document.getElementById('loginScreen').classList.add('hidden');
                     document.getElementById('app').classList.remove('hidden');
+                    // Guardar que ya se autenticó
+                    localStorage.setItem('isAuthenticated', 'true');
                     loadActivities();
                 }, 1000);
             } catch (error) {
@@ -426,6 +453,16 @@
 
         window.sendComment = sendComment;
 
+        window.logout = function() {
+            if (confirm('¿Estás seguro que deseas cerrar sesión?')) {
+                // Limpiar localStorage
+                localStorage.removeItem('selectedUser');
+                localStorage.removeItem('isAuthenticated');
+                // Recargar la página
+                location.reload();
+            }
+        };
+
         function handleFileSelect(e) {
             Array.from(e.target.files).forEach(f => {
                 selectedFiles.push(f);
@@ -505,9 +542,14 @@
                             <h1 class="text-3xl font-bold">Sistema de Seguimiento</h1>
                             <p class="text-blue-200">SDHyBC</p>
                         </div>
-                        <div class="text-right">
-                            <p class="text-sm text-blue-200">Sesión iniciada como:</p>
-                            <p class="font-bold">${currentUser}</p>
+                        <div class="text-right flex items-center gap-4">
+                            <div>
+                                <p class="text-sm text-blue-200">Sesión iniciada como:</p>
+                                <p class="font-bold">${currentUser}</p>
+                            </div>
+                            <button onclick="window.logout()" class="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm transition">
+                                Cerrar sesión
+                            </button>
                         </div>
                     </div>
                 </div>
