@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Sistema de seguimiento de actividades - CEySIE</title>
+    <title>Sistema de seguimiento de actividades - CEySIE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -108,6 +108,7 @@
         let showForm = false, showModal = false, showDeleteModal = false, showMemberStats = false, showFilesModal = false, showMessagesModal = false;
         let currentActivity = null, activityToDelete = null, deletePassword = '';
         let selectedFiles = [], selectedLinks = [], searchTerm = '', filterMember = '', filterStatus = '', filterMonth = '';
+        let uploadingFiles = 0; // Contador de archivos subiendo actualmente
         let formData = { creator: '', title: '', description: '', deadline: '', requiresSubmission: false };
         let submissionData = { name: '', comments: '' };
         let openComments = {}; // Rastrear qué comentarios están abiertos
@@ -425,26 +426,19 @@
                 // Dividir la ruta en carpetas individuales
                 const folders = folderPath.split('/').filter(f => f.trim());
                 
-                // La primera carpeta "Mensajes Directos" se crea en My Drive (sin parent)
-                // El resto se crea dentro de la anterior
-                let currentParentId = null; // null = My Drive raíz
+                // CAMBIO: Crear DENTRO de la carpeta compartida del sistema
+                let currentParentId = GOOGLE_DRIVE_FOLDER_ID;
                 
                 console.log('Carpetas a crear:', folders);
+                console.log('Carpeta raíz compartida ID:', currentParentId);
                 
-                // Crear cada carpeta en secuencia
+                // Crear cada carpeta en secuencia dentro de la carpeta compartida
                 for (let i = 0; i < folders.length; i++) {
                     const folderName = folders[i].trim();
                     console.log(`${i + 1}/${folders.length} - Procesando carpeta: "${folderName}"`);
-                    console.log(`  Padre actual ID: ${currentParentId || 'My Drive raíz'}`);
+                    console.log(`  Padre actual ID: ${currentParentId}`);
                     
-                    if (i === 0) {
-                        // Primera carpeta: buscar/crear en My Drive raíz
-                        currentParentId = await findOrCreateInMyDrive(folderName);
-                    } else {
-                        // Resto de carpetas: crear dentro de la anterior
-                        currentParentId = await getOrCreateFolder(folderName, currentParentId);
-                    }
-                    
+                    currentParentId = await getOrCreateFolder(folderName, currentParentId);
                     console.log(`  ✅ Carpeta OK. Nuevo ID: ${currentParentId}`);
                 }
                 
@@ -452,55 +446,6 @@
                 return currentParentId;
             } catch (error) {
                 console.error('❌ Error en getOrCreateFolderByPath:', error);
-                throw error;
-            }
-        }
-        
-        async function findOrCreateInMyDrive(folderName) {
-            try {
-                // Buscar carpeta en My Drive raíz
-                const query = `name='${folderName.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents`;
-                const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Error buscando en My Drive');
-                }
-                
-                const result = await response.json();
-                
-                if (result.files && result.files.length > 0) {
-                    console.log(`✅ Carpeta "${folderName}" ya existe en My Drive`);
-                    return result.files[0].id;
-                }
-                
-                // No existe, crear en My Drive raíz
-                console.log(`📁 Creando "${folderName}" en My Drive...`);
-                const metadata = {
-                    name: folderName,
-                    mimeType: 'application/vnd.google-apps.folder'
-                    // Sin parents = se crea en My Drive raíz
-                };
-                
-                const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(metadata)
-                });
-                
-                if (!createResponse.ok) {
-                    throw new Error('Error creando carpeta en My Drive');
-                }
-                
-                const createResult = await createResponse.json();
-                console.log(`✅ Carpeta "${folderName}" creada en My Drive (ID: ${createResult.id})`);
-                return createResult.id;
-            } catch (error) {
-                console.error('Error en findOrCreateInMyDrive:', error);
                 throw error;
             }
         }
@@ -669,12 +614,20 @@
                 const submissionId = Date.now().toString();
                 const personName = currentUser; // Usar el usuario autenticado
                 
+                // Actualizar contador de archivos subiendo
+                uploadingFiles = selectedFiles.length;
+                render();
+                
                 // Subir archivos
                 const uploadedFiles = [];
                 for (let i = 0; i < selectedFiles.length; i++) {
                     const file = selectedFiles[i];
                     const uploadedFile = await uploadToGoogleDrive(file, currentActivity.title, personName);
                     uploadedFiles.push(uploadedFile);
+                    
+                    // Decrementar contador después de cada archivo
+                    uploadingFiles--;
+                    render();
                 }
                 
                 // Agregar links
@@ -705,10 +658,14 @@
                 showModal = false;
                 currentActivity = null;
                 
+                // Resetear contador
+                uploadingFiles = 0;
+                
                 alert('✅ Entrega registrada correctamente');
                 render();
             } catch (error) {
                 console.error('❌ Error:', error);
+                uploadingFiles = 0; // Resetear en caso de error
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = 'Subir';
@@ -1003,6 +960,14 @@
                                 💬 Mensajes
                                 ${messages.filter(m => m.to === currentUser && !m.read).length > 0 ? `<span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">${messages.filter(m => m.to === currentUser && !m.read).length}</span>` : ''}
                             </button>
+                            ${uploadingFiles > 0 ? `
+                            <div class="bg-blue-600 px-4 py-2 rounded-lg text-sm flex items-center gap-2 animate-pulse shadow-lg">
+                                <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                                <span class="font-semibold">Subiendo ${uploadingFiles} archivo${uploadingFiles > 1 ? 's' : ''}...</span>
+                            </div>
+                            ` : ''}
                             <a href="https://docs.google.com/spreadsheets/d/1G6o47Gc_Sb-6Vx1w9gwOfcKtahuRUYuEW4A6kiPHKes/edit?usp=sharing" target="_blank" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
@@ -1711,6 +1676,10 @@
                 // Subir archivos a Google Drive
                 const uploadedFiles = [];
                 
+                // Actualizar contador de archivos subiendo
+                uploadingFiles = newMessageFiles.length;
+                render();
+                
                 for (const file of newMessageFiles) {
                     const folderPath = `${MESSAGES_FOLDER_NAME}/De ${currentUser}/Para ${newMessageRecipient}`;
                     const folderId = await getOrCreateFolderByPath(folderPath);
@@ -1738,6 +1707,10 @@
                         url: `https://drive.google.com/file/d/${result.id}/view`,
                         type: 'file'
                     });
+                    
+                    // Decrementar contador después de cada archivo subido
+                    uploadingFiles--;
+                    render();
                 }
                 
                 // Guardar mensaje en Firestore
@@ -1754,10 +1727,15 @@
                 
                 console.log('✅ Mensaje enviado exitosamente');
                 alert('✅ Mensaje enviado correctamente');
+                
+                // Resetear contador
+                uploadingFiles = 0;
                 window.cancelNewMessage();
                 
             } catch (error) {
                 console.error('❌ Error enviando mensaje:', error);
+                uploadingFiles = 0; // Resetear contador en caso de error
+                render();
                 alert('❌ Error al enviar mensaje: ' + error.message);
             }
         };
