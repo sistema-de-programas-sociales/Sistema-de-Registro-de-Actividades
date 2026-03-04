@@ -602,7 +602,18 @@
                 alert('Por favor agrega al menos un archivo o enlace'); 
                 return;
             }
-            
+
+            // Capturar datos de currentActivity ANTES de cualquier render() o await
+            // Evita el error "Cannot read properties of null (reading 'firebaseId')"
+            // que ocurre cuando render() destruye y recrea el DOM durante la subida
+            if (!currentActivity || !currentActivity.firebaseId) {
+                alert('Error: no se pudo identificar la actividad. Por favor cierra el modal e inténtalo de nuevo.');
+                return;
+            }
+            const activityFirebaseId = currentActivity.firebaseId;
+            const activityTitle = currentActivity.title;
+            const activitySubmissions = [...currentActivity.submissions];
+
             const submitBtn = document.getElementById('submitBtn');
             
             try {
@@ -622,7 +633,7 @@
                 const uploadedFiles = [];
                 for (let i = 0; i < selectedFiles.length; i++) {
                     const file = selectedFiles[i];
-                    const uploadedFile = await uploadToGoogleDrive(file, currentActivity.title, personName);
+                    const uploadedFile = await uploadToGoogleDrive(file, activityTitle, personName);
                     uploadedFiles.push(uploadedFile);
                     
                     // Decrementar contador después de cada archivo
@@ -648,8 +659,8 @@
                     date: new Date().toISOString() 
                 };
                 
-                await updateDoc(doc(db, 'activities', currentActivity.firebaseId), { 
-                    submissions: [...currentActivity.submissions, submission] 
+                await updateDoc(doc(db, 'activities', activityFirebaseId), { 
+                    submissions: [...activitySubmissions, submission] 
                 });
                 
                 submissionData = { name: '', comments: '' }; 
