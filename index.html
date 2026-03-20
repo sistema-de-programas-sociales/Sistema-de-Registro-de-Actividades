@@ -275,6 +275,8 @@
                     loadMessages();
                     // Iniciar sistema de inactividad
                     setupActivityListeners();
+                    // Activar protección al cerrar ventana
+                    activateCloseProtection();
                 }, 1000);
             } catch (error) {
                 console.error('Error al autenticar:', error);
@@ -507,7 +509,11 @@
                     },
                     (error) => {
                         console.error('❌ Error:', error);
-                        alert('Error al cargar actividades');
+                        if (error.code === 'permission-denied') {
+                            alert('❌ Error de permisos en Firestore.\n\nVe a Firebase Console → Firestore → Reglas y cambia:\n  allow read, write: if false;\npor:\n  allow read, write: if true;\n\n(Solo para desarrollo. En producción usa reglas apropiadas)');
+                        } else {
+                            alert('Error al cargar actividades: ' + error.message);
+                        }
                     }
                 );
             } catch (error) {
@@ -775,6 +781,8 @@
 
         window.logout = function() {
             if (confirm('¿Estás seguro que deseas cerrar sesión?')) {
+                // Desactivar protección al cerrar
+                deactivateCloseProtection();
                 // Limpiar localStorage
                 localStorage.removeItem('selectedUser');
                 localStorage.removeItem('isAuthenticated');
@@ -856,6 +864,25 @@
             resetInactivityTimer();
         };
         
+        // Protección al cerrar ventana
+        let closeProtectionHandler = null;
+
+        function activateCloseProtection() {
+            if (closeProtectionHandler) return; // ya activa
+            closeProtectionHandler = function(e) {
+                e.preventDefault();
+                e.returnValue = '';
+            };
+            window.addEventListener('beforeunload', closeProtectionHandler);
+        }
+
+        function deactivateCloseProtection() {
+            if (closeProtectionHandler) {
+                window.removeEventListener('beforeunload', closeProtectionHandler);
+                closeProtectionHandler = null;
+            }
+        }
+
         function autoLogout() {
             closeWarning();
             // Desactivar protección
